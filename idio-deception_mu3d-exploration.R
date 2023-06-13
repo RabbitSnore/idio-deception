@@ -7,6 +7,8 @@
 library(tidyverse)
 library(readxl)
 library(lme4)
+library(cowplot)
+library(performance)
 
 # Load data --------------------------------------------------------------------
 
@@ -54,6 +56,22 @@ wordcount_table <- mu3d %>%
     se             = sd/sqrt(n()),
     ci_lb          = mean_wordcount - se*qnorm(.975),
     ci_ub          = mean_wordcount + se*qnorm(.975)
+  )
+
+mu3d_wordcount_ind <- mu3d %>% 
+  pivot_wider(
+    id_cols = "id",
+    names_from = c("veracity", "valence"),
+    names_prefix = "message_",
+    values_from = "wordcount"
+  ) %>%
+  mutate(
+    diff_wordcount = ((message_1_1 - message_0_1) + (message_1_0 - message_0_0))/2,
+    base_wordcount = (message_1_1 + message_1_0)/2
+  ) %>% 
+  left_join(
+    select(mu3d, id, sex, race),
+    by = "id"
   )
 
 # Concreteness ratings
@@ -116,10 +134,11 @@ concreteness_table <- mu3d %>%
 wordcount_lmm_base <- lmer(
   wordcount 
   ~ 1
-  + veracity
   + (1|id),
   data = mu3d
 )
+
+wordcount_icc <- icc(wordcount_lmm_base, by_group = TRUE)
 
 wordcount_lmm_slopes <- lmer(
   wordcount 
@@ -139,24 +158,6 @@ mu3d <- mu3d %>%
     veracity_wordcount  = veracity0
   ) %>% 
   select(-`(Intercept)`, -veracity0)
-
-# Concreteness
-
-concreteness_lmm_base <- lmer(
-  concreteness 
-  ~ 1
-  + veracity
-  + (1|id),
-  data = mu3d
-)
-
-concreteness_lmm_slopes <- lmer(
-  concreteness 
-  ~ 1
-  + veracity
-  + (1 + veracity|id),
-  data = mu3d
-)
 
 # Visualization ----------------------------------------------------------------
 
@@ -205,20 +206,18 @@ ggplot(mu3d,
   ) +
   theme_classic()
 
-ggplot(mu3d,
-       aes(
-         x = veracity0
-       )) +
-  geom_histogram(
-    binwidth = 0.50
-  ) +
-  theme_classic()
+## Baseline word count by deception effect
 
-ggplot(mu3d,
+word_cue_base <- 
+ggplot(mu3d_wordcount_ind,
        aes(
-         x = intercept_wordcount,
-         y = veracity_wordcount
+         x = base_wordcount,
+         y = diff_wordcount
        )) +
+  geom_smooth(
+    method = "lm",
+    formula = "y ~ x"
+  ) +
   geom_point() +
   geom_vline(
     xintercept = mean(mu3d$wordcount),
@@ -229,11 +228,83 @@ ggplot(mu3d,
     linetype = "dotted"
   ) +
   scale_y_continuous(
-    breaks = seq(-10, 10, 1)
   ) +
   labs(
-    x = "Intercept (Word Count)",
-    y = "Effect of Deception"
+    x = "Average Truthful Word Count",
+    y = "Average Effect of Deception (words)"
   ) +
   theme_classic()
 
+word_cue_race <- 
+ggplot(mu3d_wordcount_ind,
+       aes(
+         x = base_wordcount,
+         y = diff_wordcount,
+         color = as.factor(race)
+       )) +
+  geom_smooth(
+    method = "lm",
+    formula = "y ~ x"
+  ) +
+  geom_point() +
+  geom_vline(
+    xintercept = mean(mu3d$wordcount),
+    linetype   = "dashed"
+  ) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dotted"
+  ) +
+  scale_y_continuous(
+    breaks = seq(-30, 80, 10)
+  ) +
+  scale_color_manual(
+    values = c("#FFBC42", "#D81159"),
+    labels = c("Black", "White")
+  ) +
+  labs(
+    x     = "Average Truthful Word Count",
+    y     = "Average Effect of Deception (words)",
+    color = "Race"
+  ) +
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+word_cue_gender <- 
+ggplot(mu3d_wordcount_ind,
+       aes(
+         x = base_wordcount,
+         y = diff_wordcount,
+         color = as.factor(sex)
+       )) +
+  geom_smooth(
+    method = "lm",
+    formula = "y ~ x"
+  ) +
+  geom_point() +
+  geom_vline(
+    xintercept = mean(mu3d$wordcount),
+    linetype   = "dashed"
+  ) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dotted"
+  ) +
+  scale_y_continuous(
+    breaks = seq(-30, 80, 10)
+  ) +
+  scale_color_manual(
+    values = c("#406E8E", "#FF5154"),
+    labels = c("Female", "Male")
+  ) +
+  labs(
+    x     = "Average Truthful Word Count",
+    y     = "Average Effect of Deception (words)",
+    color = "Gender"
+  ) +
+  theme_classic() +
+  theme(legend.position = "bottom")
+
+word_cue_grid <- 
+plot_grid(word_cue_base, word_cue_race, word_cue_gender,
+          nrow = 3, rel_heights = c(1, 1.2, 1.2))
