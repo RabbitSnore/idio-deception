@@ -10,6 +10,11 @@ library(lme4)
 library(cowplot)
 library(performance)
 library(metafor)
+library(qgraph)
+library(IsingFit)
+library(psych)
+library(igraph)
+library(psychonetrics)
 
 # Load data --------------------------------------------------------------------
 
@@ -167,3 +172,116 @@ hands_decep_lmm <- glmer(hand_n
                          ))
 
 hands_coef <- coef(hands_decep_lmm)$subject_nr
+
+# Networks ---------------------------------------------------------------------
+
+# Iteratively generate network graphs for each sender
+
+loy_select <- loy %>% 
+  select(
+    subject_nr,
+    veracity = utterance,
+    fp, sp, sub, 
+    prolongations, repairs, repetitions,
+    head_ns, hand_n, body, shoulder, mouth, eyebrows, smile, gaze
+  ) %>% 
+  mutate(
+    veracity = case_when(
+      veracity == "truth" ~ 0,
+      veracity == "lie"   ~ 1
+    )
+  ) %>%
+  mutate(
+    across(everything(), as.character)
+  ) %>% 
+  type_convert()
+
+subs <- length(unique(loy$subject_nr))
+
+network_list <- list()
+poly_list    <- list()
+
+for (i in 1:subs) {
+  
+  # Select appropriate sender
+  
+  loy_sub <- loy_select %>% 
+    filter(subject_nr == unique(loy$subject_nr)[[i]]) %>% 
+    select(-subject_nr)
+  
+  # Find and remove items with no variance
+  
+  retain <- apply(loy_sub, 2,
+                  function(x) {
+                    
+                    if (length(unique(x)) == 1) {
+                      
+                      return(0)
+                      
+                    } else {
+                      
+                      return(1)
+                      
+                    }
+                    
+                  })
+  
+  loy_trunc <- loy_sub[, retain == 1]
+  
+  if (nrow(loy_trunc) == 0) {
+    
+    network_list[i] <- NA
+    
+  } else {
+    
+    poly_list[i] <- polychoric(loy_trunc)[1]
+    
+    net_base <- ggm(loy_trunc,
+                    omega = "full")
+
+    net_opt <- net_base %>%
+      prune(
+        alpha  = .10,
+        adjust = "none") %>%
+      modelsearch(
+        prunealpha = .10,
+        addalpha   = .10
+      ) %>%
+      runmodel()
+
+    network_list[[i]] <- getmatrix(net_opt, "omega")
+
+    rownames(network_list[[i]]) <- colnames(loy_trunc)
+    colnames(network_list[[i]]) <- colnames(loy_trunc)
+  
+  }
+  
+}
+
+# Visualizations for each participant
+
+plot_list <- list()
+
+for (i in 1:subs) {
+  
+    plot_list[i] <- 
+      qgraph(network_list[[i]],
+             layout    = "spring",
+             color     = c("darkred", rep("white", ncol(network_list[[i]]) - 1))
+             )
+  
+}
+
+poly_plot_list <- list()
+
+for (i in 1:subs) {
+  
+  poly_plot_list[i] <- 
+    qgraph(poly_list[[i]],
+           layout    = "spring",
+           color     = c("darkred", rep("white", ncol(network_list[[i]]) - 1))
+    )
+  
+}
+
+
