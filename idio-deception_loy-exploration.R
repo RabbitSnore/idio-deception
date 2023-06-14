@@ -15,6 +15,9 @@ library(IsingFit)
 library(psych)
 library(igraph)
 library(psychonetrics)
+library(grid)
+library(gridExtra)
+library(png)
 
 # Load data --------------------------------------------------------------------
 
@@ -267,7 +270,13 @@ for (i in 1:subs) {
     plot_list[i] <- 
       qgraph(network_list[[i]],
              layout    = "spring",
-             color     = c("darkred", rep("white", ncol(network_list[[i]]) - 1))
+             color     = c("darkred", rep("white", ncol(network_list[[i]]) - 1)),
+             filename  = paste("figures/loy_network-plot_", 
+                               str_pad(i, width = 2, pad = "0"), 
+                               sep = ""),
+             filetype  = "png",
+             height    = 5,
+             width     = 5
              )
   
 }
@@ -279,9 +288,55 @@ for (i in 1:subs) {
   poly_plot_list[i] <- 
     qgraph(poly_list[[i]],
            layout    = "spring",
-           color     = c("darkred", rep("white", ncol(network_list[[i]]) - 1))
+           color     = c("darkred", rep("white", ncol(network_list[[i]]) - 1)),
+           filename  = paste("figures/loy_polychor-plot_", 
+                             str_pad(i, width = 2, pad = "0"), 
+                             sep = ""),
+           filetype  = "png",
+           height    = 5,
+           width     = 5
     )
   
 }
 
+# Create grid plots
 
+network_names <- paste("figures/loy_network-plot_", 
+                        str_pad(1:subs, width = 2, pad = "0"),
+                        ".png",
+                        sep = "")
+
+for (i in 1:length(network_names)) {
+  
+  assign(paste("network_plot_", i, sep = ""),
+         readPNG(network_names[i]))
+  
+}
+
+png("./figures/loy_network-grid.png", 
+    height = 12, width = 12, units = "in", res = 1500)
+grid.arrange(grobs = 
+               map(paste("network_plot_", 1:subs, sep = ""), 
+                   function(x) { rasterGrob(get(x))}),
+             nrow = 4)
+dev.off()
+
+polychor_names <- paste("figures/loy_polychor-plot_", 
+                        str_pad(1:subs, width = 2, pad = "0"),
+                        ".png",
+                        sep = "")
+
+for (i in 1:length(polychor_names)) {
+  
+  assign(paste("polychor_plot_", i, sep = ""),
+         readPNG(polychor_names[i]))
+  
+}
+
+png("./figures/loy_polychor-grid.png", 
+    height = 12, width = 12, units = "in", res = 1500)
+grid.arrange(grobs = 
+               map(paste("polychor_plot_", 1:subs, sep = ""), 
+                 function(x) { rasterGrob(get(x))}),
+             nrow = 4)
+dev.off()
