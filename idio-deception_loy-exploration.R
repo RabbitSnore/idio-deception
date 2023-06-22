@@ -21,7 +21,15 @@ library(png)
 
 # Load data --------------------------------------------------------------------
 
-# Data are available here
+# Data for this study can be retrieved from https://osf.io/auj5b/
+
+if (!file.exists("data/data_allcues.RDS")) {
+  
+  osf_retrieve_file("5b1475b364f25a000f7661ba") %>% 
+    osf_download(path = "data/", 
+                 conflicts = "overwrite")
+  
+}
 
 loy <- readRDS("data/data_allcues.RDS")
 
@@ -299,6 +307,135 @@ for (i in 1:subs) {
   
 }
 
+# Group level networks
+
+## Simple polychoric correlation matrix as a network
+
+loy_full_poly <- polychoric(select(loy_select, -subject_nr))
+
+loy_full_poly_plot <- 
+  qgraph(loy_full_poly[[1]],
+         layout    = "spring",
+         color     = c("darkred", rep("white", ncol(loy_full_poly[[1]]) - 1)),
+         filename  = "figures/loy_polychor-plot_full",
+         filetype  = "png",
+         height    = 5,
+         width     = 5
+  )
+
+## Gaussaian graphical model
+
+net_full_base <- ggm(select(loy_select, -subject_nr),
+                omega = "full")
+
+net_full_opt <- net_full_base %>%
+  prune(
+    alpha  = .10,
+    adjust = "none") %>%
+  modelsearch(
+    prunealpha = .10,
+    addalpha   = .10
+  ) %>%
+  runmodel()
+
+network_full           <- getmatrix(net_full_opt, "omega") 
+rownames(network_full) <- colnames(loy_full_poly[[1]])
+colnames(network_full) <- colnames(loy_full_poly[[1]])
+
+loy_full_ggm_plot <- 
+  qgraph(network_full,
+         layout    = "spring",
+         color     = c("darkred", rep("white", ncol(network_full) - 1)),
+         title     = "Cross-Sectional Network",
+         filename  = "figures/loy_ggm-plot_full",
+         filetype  = "png",
+         height    = 5,
+         width     = 5
+  )
+
+## Variability network
+
+var_net <- loy_full_poly[[1]]
+var_net[var_net != 1] <- NA
+
+var_com <- expand_grid(x = colnames(var_net), y = colnames(var_net))
+
+for (i in 1:nrow(var_com)) {
+  
+  var_vec <- rep(NA, subs)
+  
+  for (k in 1:subs) {
+    
+    if (var_com[i, ]$x %in% colnames(network_list[[k]]) & var_com[i, ]$y %in% colnames(network_list[[k]])) {
+      
+      var_vec[k] <- network_list[[k]][var_com[i, ]$x, var_com[i, ]$y]
+      
+    } else {
+     
+      var_vec[k] <- NA
+      
+    }
+    
+  }
+  
+  var_vec[is.na(var_vec)] <- 0
+  
+  var_net[var_com[i, ]$x, var_com[i, ]$y] <- sd(var_vec)
+  
+}
+
+loy_variance_ggm_plot <- 
+  qgraph(var_net,
+         layout     = loy_full_ggm_plot$layout,
+         color      = c("darkred", rep("white", ncol(network_full) - 1)),
+         edge.color = "darkgrey",
+         title      = "Across-Individual Variability",
+         filename   = "figures/loy_ggm-variance-plot_full",
+         filetype   = "png",
+         height     = 5,
+         width      = 5
+  )
+
+## Average Within-Subjects network
+
+avg_net <- loy_full_poly[[1]]
+avg_net[avg_net != 1] <- NA
+
+for (i in 1:nrow(var_com)) {
+  
+  avg_vec <- rep(NA, subs)
+  
+  for (k in 1:subs) {
+    
+    if (var_com[i, ]$x %in% colnames(network_list[[k]]) & var_com[i, ]$y %in% colnames(network_list[[k]])) {
+      
+      avg_vec[k] <- network_list[[k]][var_com[i, ]$x, var_com[i, ]$y]
+      
+    } else {
+      
+      avg_vec[k] <- NA
+      
+    }
+    
+  }
+  
+  avg_vec[is.na(avg_vec)] <- 0
+  
+  avg_net[var_com[i, ]$x, var_com[i, ]$y] <- mean(avg_vec)
+  
+}
+
+loy_average_ggm_plot <- 
+  qgraph(avg_net,
+         layout     = loy_full_ggm_plot$layout,
+         color      = c("darkred", rep("white", ncol(network_full) - 1)),
+         title      = "Across-Individual Average Network",
+         filename   = "figures/loy_ggm-average-plot_full",
+         filetype   = "png",
+         height     = 5,
+         width      = 5
+  )
+
 # Create grid plots
 
 network_names <- paste("figures/loy_network-plot_", 
@@ -339,4 +476,15 @@ grid.arrange(grobs =
                map(paste("polychor_plot_", 1:subs, sep = ""), 
                  function(x) { rasterGrob(get(x))}),
              nrow = 4)
+dev.off()
+
+png("./figures/loy_ggm-full-figure.png", 
+    height = 12, width = 12, units = "in", res = 1500)
+grid.arrange(grobs = 
+               map(c("figures/loy_ggm-plot_full.png",
+                     "figures/loy_ggm-average-plot_full.png",
+                     "figures/loy_ggm-variance-plot_full.png",
+                     "figures/loy_network-grid.png"), 
+                   function(x) { rasterGrob(readPNG(x))}),
+             nrow = 2)
 dev.off()

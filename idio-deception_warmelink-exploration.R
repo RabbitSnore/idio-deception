@@ -1,6 +1,6 @@
 ################################################################################
 
-# An Idiographic Approach to Deception Cues - Warmelink & O'Connell
+# An Idiographic Approach to Deception Cues - Warmelink & O'Connell (2023)
 
 ################################################################################
 
@@ -14,7 +14,13 @@ library(metafor)
 
 # Data for this study can be retrieved from https://osf.io/9fne8/
 
-detail_data    <- read_csv("data/Detail analysis Temporal Study.csv")
+if (!file.exists("data/Execution Study Long Format.csv")) {
+  
+  osf_retrieve_file("62ab1f83a065d90776d173c6") %>% 
+    osf_download(path = "data/", 
+                 conflicts = "overwrite")
+  
+}
 
 execution_data <- read_csv("data/Execution Study Long Format.csv")
 
@@ -84,18 +90,3 @@ detail_base_lmm  <- lmer(total_details
 details_coef <- coef(detail_base_lmm)$question
 
 detail_rma <- rma(yi = yi, vi = vi, data = mean_details_wide)
-
-# Visualizations ---------------------------------------------------------------
-
-ggplot(mean_details_wide,
-       aes(
-         x = mean_0,
-         y = yi*-1
-       )) +
-  geom_point() +
-  geom_hline(
-    yintercept = 0,
-    linetype = "dashed"
-  ) +
-  theme_classic()
-

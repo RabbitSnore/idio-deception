@@ -1,20 +1,22 @@
 ################################################################################
 
-# An Idiographic Approach to Deception Cues - Miami Data
+# An Idiographic Approach to Deception Cues - MU3D (Lloyd et al, 2017)
 
 ################################################################################
 
 library(tidyverse)
 library(readxl)
 library(lme4)
+library(lmerTest)
 library(cowplot)
 library(performance)
 
 # Load data --------------------------------------------------------------------
 
-mu3d <- read_xlsx("data/MU3D Codebook.xlsx", sheet = 2)
+# Accessing these data requires agreement to terms and conditions
+# The data can be accessed here: https://sc.lib.miamioh.edu/handle/2374.MIA/6067
 
-concreteness <- read_xlsx("data/ConcreteDictionary.xlsx")
+mu3d <- read_xlsx("data/MU3D Codebook.xlsx", sheet = 2)
 
 # Wrangle ----------------------------------------------------------------------
 
@@ -74,59 +76,6 @@ mu3d_wordcount_ind <- mu3d %>%
     by = "id"
   )
 
-# Concreteness ratings
-
-mu3d_text <- mu3d$transcription
-
-mu3d_text <- str_remove_all(mu3d_text, "[[:punct:]]")
-
-mu3d_text_split <- str_split(mu3d_text, " ")
-
-mu3d_text_coded <- 
-  map(mu3d_text_split, function(x) {
-    
-    map(x, function(y) {
-      
-      concreteness[concreteness$Word == y, ]$Conc.M
-      
-    })
-    
-  })
-
-mu3d_text_conc_means <- 
-  map(mu3d_text_coded, function(x) {
-    
-    mean(unlist(x), na.rm = TRUE)
-    
-  }) %>% 
-  unlist()
-
-mu3d$concreteness <- mu3d_text_conc_means
-
-subject_mean_concreteness <- mu3d %>% 
-  group_by(id) %>% 
-  summarise(
-    mean_concreteness = mean(concreteness)
-  )
-
-mu3d$id <- factor(
-  mu3d$id, 
-  levels = arrange(subject_mean_concreteness, desc(mean_concreteness))$id)
-
-subject_mean_concreteness$id <- factor(
-  subject_mean_concreteness$id, 
-  levels = arrange(subject_mean_concreteness, desc(mean_concreteness))$id)
-
-concreteness_table <- mu3d %>% 
-  group_by(veracity) %>% 
-  summarise(
-    mean_concreteness = mean(concreteness),
-    sd                = sd(concreteness),
-    se                = sd/sqrt(n()),
-    ci_lb             = mean_concreteness - se*qnorm(.975),
-    ci_ub             = mean_concreteness + se*qnorm(.975)
-  )
-
 # Statistical modeling ---------------------------------------------------------
 
 # Word count
@@ -160,51 +109,6 @@ mu3d <- mu3d %>%
   select(-`(Intercept)`, -veracity0)
 
 # Visualization ----------------------------------------------------------------
-
-ggplot(wordcount_table,
-       aes(
-         y = mean_wordcount,
-         x = veracity,
-         group = 1,
-         ymax = ci_ub,
-         ymin = ci_lb
-       )) +
-  geom_line(
-    linewidth = 1
-  ) +
-  geom_errorbar(
-    linewidth = 1,
-    width = .25
-  ) +
-  theme_classic()
-
-ggplot(mu3d,
-       aes(
-         y = wordcount,
-         x = veracity,
-         group = id_valence,
-         color = as.factor(valence)
-       )) +
-  facet_wrap(~ id, nrow = 8) +
-  geom_line(
-    linewidth = 1,
-    alpha     = .5
-  ) +
-  geom_hline(
-    data = subject_mean_wordcount,
-    aes(
-      yintercept = mean_wordcount
-    ),
-    linetype = "dotted"
-  ) +
-  geom_hline(
-    yintercept = mean(mu3d$wordcount),
-    linetype   = "dashed"
-  ) +
-  guides(
-    color = "none"
-  ) +
-  theme_classic()
 
 ## Baseline word count by deception effect
 
@@ -307,4 +211,7 @@ ggplot(mu3d_wordcount_ind,
 
 word_cue_grid <- 
 plot_grid(word_cue_base, word_cue_race, word_cue_gender,
-          nrow = 3, rel_heights = c(1, 1.2, 1.2))
+          nrow = 1, align = "h", axis = "b")
+
+save_plot("figures/mu3d_word-count_grid.png", word_cue_grid,
+          base_height = 4, base_width = 10)

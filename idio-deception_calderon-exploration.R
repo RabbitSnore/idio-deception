@@ -1,6 +1,6 @@
 ################################################################################
 
-# An Idiographic Approach to Deception Cues - Calderon et al data set
+# An Idiographic Approach to Deception Cues - Calderon et al (2022)
 
 ################################################################################
 
@@ -10,8 +10,17 @@ library(lme4)
 library(cowplot)
 library(performance)
 library(metafor)
+library(osfr)
 
 # Load data --------------------------------------------------------------------
+
+if (!file.exists("data/responses.csv")) {
+  
+  osf_retrieve_file("5c7fa2c758e63b0019d6e042") %>% 
+    osf_download(path = "data/", 
+                 conflicts = "overwrite")
+  
+}
 
 combined <- read_csv("data/responses.csv")
 
@@ -41,7 +50,10 @@ question_data <- combined %>%
 question_meta <- escalc(measure = "SMD", data = question_data,
                         m1i = mean_wordcount_1, m2i = mean_wordcount_2,
                         sd1i = sd_wordcount_1, sd2i = sd_wordcount_2,
-                        n1i = n_1, n2i = n_2)
+                        n1i = n_1, n2i = n_2) %>% 
+  mutate(
+    yi = yi * -1
+  )
 
 vrij_2011 <- combined %>% 
   filter(study == "Vrij2011b")
@@ -64,63 +76,6 @@ question_rma     <- rma.mv(yi = yi,
                        V = vi, 
                        random = ~ 1|study, 
                        data = question_meta)
-
-question_rma_mod <- rma.mv(yi = yi, 
-                           V = vi, 
-                           mods = ~ scale(mean_wordcount_1, scale = FALSE),
-                           random = ~ 1|study, 
-                           data = question_meta)
-
-question_rma_100 <- rma.mv(yi = yi, 
-                           V = vi, 
-                           mods = ~ scale(mean_wordcount_1, 
-                                          scale = FALSE,
-                                          center = 100),
-                           random = ~ 1|study, 
-                           data = question_meta)
-
-question_rma_15  <- rma.mv(yi = yi, 
-                           V = vi, 
-                           mods = ~ scale(mean_wordcount_1, 
-                                          scale = FALSE,
-                                          center = 15),
-                           random = ~ 1|study, 
-                           data = question_meta)
-
-## Within-person analysis
-
-wordcount_lmm_vrij <- lmer(
-  length
-  ~ 1
-  + (1|subject)
-  + (1|question),
-  data = vrij_2011
-)
-
-wordcount_vrij_icc <- icc(wordcount_lmm_vrij, by_group = TRUE)
-
-wordcount_lmm_vrij_veracity <- lmer(
-  length
-  ~ 1
-  + veracity
-  + (1 + veracity|subject)
-  + (1 + veracity|question),
-  data = vrij_2011
-)
-
-lmm_vrij_coef <- coef(wordcount_lmm_vrij_veracity)
-
-vrij_2011_wordcount_ind <- vrij_2011 %>% 
-  pivot_wider(
-    id_cols = c("subject", "question"),
-    names_from = "veracity",
-    names_prefix = "message_",
-    values_from = "length"
-  ) %>%
-  mutate(
-    diff_wordcount = (message_1 - message_2)/2,
-    base_wordcount = message_1
-  )
 
 # Visualization ----------------------------------------------------------------
 
@@ -167,67 +122,49 @@ ggplot(lmm_vrij_coef$subject,
   ) +
   theme_classic()
 
-vrij_2011_wordcount_plot <- 
-ggplot(vrij_2011_wordcount_ind,
+calderon_stationarity_plot <- 
+ggplot(question_meta,
        aes(
-         x = base_wordcount,
-         y = diff_wordcount
+         x     = question,
+         y     = yi,
+         color = study,
+         group = study
        )) +
-  geom_smooth(
-    method = "lm",
-    formula = "y ~ x"
-  ) +
-  geom_point() +
-  geom_vline(
-    xintercept = mean(vrij_2011$length),
-    linetype   = "dashed"
-  ) +
   geom_hline(
     yintercept = 0,
-    linetype = "dotted"
+    linetype = "dashed"
+  ) +
+  geom_point(
+    size = 2
+  ) +
+  geom_line(
+    linewidth = 1
+  ) +
+  scale_color_manual(
+    values = c("#221D23",
+               "#4F3824",
+               "#D1603D",
+               "#DDB967",
+               "#D0E37F",
+               "#0B7A75")
   ) +
   scale_y_continuous(
+    breaks = seq(-.80, .80, .10)
   ) +
-  labs(
-    x = "Average Truthful Word Count",
-    y = "Average Effect of Deception (words)"
-  ) +
-  theme_classic()
-
-vrij_2011_wordcount_sub_plot <- 
-ggplot(vrij_2011_wordcount_ind,
-       aes(
-         x = base_wordcount,
-         y = diff_wordcount
-       )) +
-  geom_smooth(
-    aes(group = as.factor(subject)),
-    method = "lm",
-    formula = "y ~ x",
-    se = FALSE,
-    linewidth = .05,
-    color = "lightblue"
-  ) +
-  geom_smooth(
-    method = "lm",
-    formula = "y ~ x"
-  ) +
-  geom_point() +
-  geom_vline(
-    xintercept = mean(vrij_2011$length),
-    linetype   = "dashed"
-  ) +
-  geom_hline(
-    yintercept = 0,
-    linetype = "dotted"
-  ) +
-  scale_y_continuous(
-  ) +
-  labs(
-    x = "Average Truthful Word Count",
-    y = "Average Effect of Deception (words)"
+  scale_x_discrete(
+    labels = NULL
   ) +
   guides(
     color = "none"
   ) +
-  theme_classic()
+  labs(
+    x = "Interview Question",
+    y = "Effect of Deception (g)"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+save_plot("figures/calderon_stationarity-plot.png", calderon_stationarity_plot,
+          base_width = 10, base_height = 3.5)
