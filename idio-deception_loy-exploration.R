@@ -494,3 +494,13 @@ grid.arrange(grobs =
                    function(x) { rasterGrob(readPNG(x))}),
              nrow = 2)
 dev.off()
+
+png("./figures/loy_ggm-summary-figure.png", 
+    height = 12, width = 12, units = "in", res = 1500)
+grid.arrange(grobs = 
+               map(c("figures/loy_ggm-plot_full.png",
+                     "figures/loy_ggm-average-plot_full.png",
+                     "figures/loy_ggm-variance-plot_full.png"), 
+                   function(x) { rasterGrob(readPNG(x))}),
+             nrow = 2, ncol = 2)
+dev.off()
