@@ -14,6 +14,12 @@ library(osfr)
 
 # Load data --------------------------------------------------------------------
 
+if (!dir.exists("data/")) {
+  
+  dir.create("data/")
+  
+}
+
 if (!file.exists("data/responses.csv")) {
   
   osf_retrieve_file("5c7fa2c758e63b0019d6e042") %>% 

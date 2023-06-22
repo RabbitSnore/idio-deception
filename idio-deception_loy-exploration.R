@@ -23,6 +23,12 @@ library(png)
 
 # Data for this study can be retrieved from https://osf.io/auj5b/
 
+if (!dir.exists("data/")) {
+  
+  dir.create("data/")
+  
+}
+
 if (!file.exists("data/data_allcues.RDS")) {
   
   osf_retrieve_file("5b1475b364f25a000f7661ba") %>% 

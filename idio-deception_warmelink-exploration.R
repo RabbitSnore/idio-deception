@@ -14,6 +14,12 @@ library(metafor)
 
 # Data for this study can be retrieved from https://osf.io/9fne8/
 
+if (!dir.exists("data/")) {
+  
+  dir.create("data/")
+  
+}
+
 if (!file.exists("data/Execution Study Long Format.csv")) {
   
   osf_retrieve_file("62ab1f83a065d90776d173c6") %>% 
