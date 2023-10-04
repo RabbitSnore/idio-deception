@@ -285,6 +285,7 @@ for (i in 1:subs) {
       qgraph(network_list[[i]],
              layout    = "spring",
              color     = c("darkred", rep("white", ncol(network_list[[i]]) - 1)),
+             theme     = "colorblind",
              filename  = paste("figures/loy_network-plot_", 
                                str_pad(i, width = 2, pad = "0"), 
                                sep = ""),
@@ -303,6 +304,7 @@ for (i in 1:subs) {
     qgraph(poly_list[[i]],
            layout    = "spring",
            color     = c("darkred", rep("white", ncol(network_list[[i]]) - 1)),
+           theme     = "colorblind",
            filename  = paste("figures/loy_polychor-plot_", 
                              str_pad(i, width = 2, pad = "0"), 
                              sep = ""),
@@ -323,13 +325,14 @@ loy_full_poly_plot <-
   qgraph(loy_full_poly[[1]],
          layout    = "spring",
          color     = c("darkred", rep("white", ncol(loy_full_poly[[1]]) - 1)),
+         theme     = "colorblind",
          filename  = "figures/loy_polychor-plot_full",
          filetype  = "png",
          height    = 5,
          width     = 5
   )
 
-## Gaussaian graphical model
+## Gaussian graphical model (group-level contemporaneous)
 
 net_full_base <- ggm(select(loy_select, -subject_nr),
                 omega = "full")
@@ -352,6 +355,7 @@ loy_full_ggm_plot <-
   qgraph(network_full,
          layout    = "spring",
          color     = c("darkred", rep("white", ncol(network_full) - 1)),
+         theme     = "colorblind",
          title     = "Cross-Sectional Network",
          filename  = "figures/loy_ggm-plot_full",
          filetype  = "png",
@@ -404,37 +408,43 @@ loy_variance_ggm_plot <-
 
 ## Average Within-Subjects network
 
-avg_net <- loy_full_poly[[1]]
-avg_net[avg_net != 1] <- NA
+cues <- loy_select %>% 
+  select(-subject_nr) %>% 
+  colnames()
 
-for (i in 1:nrow(var_com)) {
-  
-  avg_vec <- rep(NA, subs)
-  
-  for (k in 1:subs) {
-    
-    if (var_com[i, ]$x %in% colnames(network_list[[k]]) & var_com[i, ]$y %in% colnames(network_list[[k]])) {
-      
-      avg_vec[k] <- network_list[[k]][var_com[i, ]$x, var_com[i, ]$y]
-      
-    } else {
-      
-      avg_vec[k] <- NA
-      
-    }
-    
-  }
-  
-  avg_vec[is.na(avg_vec)] <- 0
-  
-  avg_net[var_com[i, ]$x, var_com[i, ]$y] <- mean(avg_vec)
-  
-}
+### Person mean center all cues
+
+loy_select_pmc <- loy_select %>% 
+  group_by(subject_nr) %>% 
+  mutate(
+    across(all_of(cues), function(x) {as.numeric(scale(x, scale = FALSE))})
+  ) %>% 
+  ungroup()
+
+### Estimate network model
+
+avg_net_base <- ggm(select(loy_select_pmc, -subject_nr),
+                    omega = "full")
+
+avg_net_opt <- avg_net_base %>%
+  prune(
+    alpha  = .10,
+    adjust = "none") %>%
+  modelsearch(
+    prunealpha = .10,
+    addalpha   = .10
+  ) %>%
+  runmodel()
+
+avg_net           <- getmatrix(avg_net_opt, "omega") 
+rownames(avg_net) <- colnames(loy_full_poly[[1]])
+colnames(avg_net) <- colnames(loy_full_poly[[1]])
 
 loy_average_ggm_plot <- 
   qgraph(avg_net,
          layout     = loy_full_ggm_plot$layout,
          color      = c("darkred", rep("white", ncol(network_full) - 1)),
+         theme     = "colorblind",
          title      = "Across-Individual Average Network",
          filename   = "figures/loy_ggm-average-plot_full",
          filetype   = "png",
